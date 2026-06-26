@@ -1,0 +1,467 @@
+{
+  "name": "open-plaud - Plaud to Notion",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "plaud",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "c482fde6-afd4-453a-ae73-cf854f62c11f",
+      "name": "Webhook",
+      "webhookId": "e1f0f6db-8acc-4e24-898d-4aca0eb5f14c"
+    },
+    {
+      "parameters": {
+        "fileSelector": "={{ $json.body.audioFile }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        240,
+        0
+      ],
+      "id": "23e73739-015e-4f3a-87ed-07c61fb75be2",
+      "name": "Read/Write Files from Disk"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.elevenlabs.io/v1/speech-to-text",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "data"
+            },
+            {
+              "name": "model_id",
+              "value": "scribe_v2"
+            },
+            {
+              "name": "diarize",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        464,
+        0
+      ],
+      "id": "cb99a91a-6d6c-4925-baf3-a8fef02582ab",
+      "name": "request elevenlabs",
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "nUNUwW6ep7CCJM5r",
+          "name": "ElevenLabs"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $json;\nconst words = r.words || [];\nlet out = '';\nlet cur = null;\nfor (const w of words) {\n  if (w.type === 'audio_event') continue;\n  if (w.speaker_id && w.speaker_id !== cur) {\n    out += (out ? '\\n' : '') + w.speaker_id + ': ';\n    cur = w.speaker_id;\n  }\n  out += w.text;\n}\nreturn [{ json: { transcript: out.trim() || r.text || '', language: r.language_code } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        656,
+        0
+      ],
+      "id": "e0a6d967-d4d0-45cd-a517-9fe881434a42",
+      "name": "diarizza"
+    },
+    {
+      "parameters": {
+        "jsCode": "const transcript = $json.transcript || '';\nconst MAX = 24000; // caratteri per segmento (~14 min)\nconst lines = transcript.split('\\n');\nconst chunks = [];\nlet buf = '';\nfor (const line of lines) {\n  if (buf && buf.length + line.length + 1 > MAX) { chunks.push(buf); buf = ''; }\n  buf += (buf ? '\\n' : '') + line;\n}\nif (buf.trim()) chunks.push(buf);\nreturn chunks.map((text, i) => ({ json: { chunkIndex: i + 1, total: chunks.length, chunkText: text } }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        848,
+        0
+      ],
+      "id": "7f104466-c701-4397-80c1-e9b82bfe4c82",
+      "name": "split chunk"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"deepseek/deepseek-v4-flash\",\n  \"max_tokens\": 4000,\n  \"temperature\": 0.2,\n  \"messages\": [\n    { \"role\": \"system\", \"content\": {{ JSON.stringify(\"Sei un verbalizzatore meticoloso. Stai elaborando il SEGMENTO \" + $json.chunkIndex + \" di \" + $json.total + \" di una riunione. Estrai NELLA STESSA LINGUA del testo fornito, in modo DETTAGLIATO e fedele, TUTTO ci\\u00f2 che viene detto: argomenti, sotto-punti, dettagli concreti (nomi, ruoli, numeri, importi, date, sigle, codici, versioni), decisioni, proposte, dubbi. NON riassumere via i dettagli, NON inventare nulla. Restituisci solo note puntate dettagliate, senza preamboli.\") }} },\n    { \"role\": \"user\", \"content\": {{ JSON.stringify($json.chunkText) }} }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1040,
+        0
+      ],
+      "id": "dc92cfa5-a7e2-496b-8b49-19b9f8f4710e",
+      "name": "MAP openrouter",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "2dCS6RIr9QIZ9QxT",
+          "name": "OpenRouter"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(it => ({ json: { partial: it.json.choices?.[0]?.message?.content || '' } }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1232,
+        0
+      ],
+      "id": "02cfee47-5c11-4358-97fb-c349af4efbc9",
+      "name": "estrai partial"
+    },
+    {
+      "parameters": {
+        "fieldsToAggregate": {
+          "fieldToAggregate": [
+            {
+              "fieldToAggregate": "partial"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        1424,
+        0
+      ],
+      "id": "69e5e71f-ade3-4b03-88cf-d03cbaa2a0b2",
+      "name": "Aggregate"
+    },
+    {
+      "parameters": {
+        "jsCode": "const partials = $json.partial || $json.partials || [];\nconst combined = partials.map((p, i) => `## Segmento ${i + 1}\\n${p}`).join('\\n\\n');\nconst wh = $('Webhook').first().json.body;\nconst sysPrompt = `Sei un analista esperto di riunioni. Ricevi NOTE DETTAGLIATE divise per segmenti consecutivi della STESSA riunione. Uniscile in UN UNICO resoconto COMPLETO e APPROFONDITO scritto NELLA STESSA LINGUA delle note (intestazioni di sezione comprese), organizzato per ARGOMENTO (non per segmento), eliminando le ripetizioni tra segmenti e ricostruendo il filo logico. Spiega bene tutto, SENZA tralasciare nulla di rilevante. Privilegia la completezza rispetto alla sintesi.\\n\\n# Principi\\n- Copri OGNI argomento e sotto-punto, anche secondari.\\n- ESPANDI e SPIEGA: non elencare soltanto, spiega contesto, motivazioni, implicazioni e come si \\u00e8 arrivati a ogni conclusione.\\n- Riporta TUTTI i dettagli concreti: nomi, ruoli, numeri, importi, date, percentuali, sigle, codici, programmi/sistemi, versioni, soglie.\\n- Spiega sigle e termini tecnici alla prima comparsa, se deducibile dal contesto.\\n- Distingui decisioni prese, ipotesi/proposte e questioni aperte. Riporta anche le alternative discusse e scartate, con il motivo.\\n- La lunghezza deve riflettere la densit\\u00e0 della riunione. NON comprimere.\\n\\n# Vincoli di fedelt\\u00e0\\n- Usa SOLO ci\\u00f2 che \\u00e8 presente nelle note: non inventare. Dato mancante \\u2192 \\\"non indicato\\\".\\n- Interlocutori \\\"speaker_0/1/\\u2026\\\": usa nomi propri solo se emergono chiaramente.\\n- Converti i riferimenti temporali relativi in date assolute quando il contesto lo consente.\\n- Tono professionale. Nessun preambolo o commento: solo il resoconto nel formato sottostante.\\n\\n# Formato (Markdown)\\n\\n# [Titolo]\\n**Data:** [data]\\n**Partecipanti:** [elenco oppure \\\"non identificati\\\"]\\n\\n## Sintesi esecutiva\\n5-8 righe: obiettivo, temi principali, esito complessivo.\\n\\n## Resoconto dettagliato\\nPer OGNI argomento una sezione ### con spiegazione discorsiva completa: contesto, punti di vista, dettagli tecnici, motivazioni, decisioni (con il perch\\u00e9) e alternative valutate.\\n\\n## Decisioni prese\\nElenco di tutte le decisioni definitive.\\n\\n## Action item e impegni\\n| Azione | Responsabile | Scadenza | Note |\\n|---|---|---|---|\\n(Una riga per impegno. Se nessuno: \\\"Nessun action item esplicito\\\".)\\n\\n## Questioni aperte\\nPunti rimasti da chiarire / follow-up.`;\nreturn [{ json: {\n  combined, sysPrompt,\n  title: wh.filename || 'Registrazione',\n  dateLabel: new Date(wh.startTime).toLocaleString('it-IT', { dateStyle: 'long', timeStyle: 'short' })\n}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1616,
+        0
+      ],
+      "id": "aed39570-2ca9-4fee-9d7a-1f1fccd0e90b",
+      "name": "reduce-prep"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"deepseek/deepseek-v4-flash\",\n  \"max_tokens\": 12000,\n  \"temperature\": 0.3,\n  \"messages\": [\n    { \"role\": \"system\", \"content\": {{ JSON.stringify($json.sysPrompt) }} },\n    { \"role\": \"user\", \"content\": {{ JSON.stringify(\"Titolo: \" + $json.title + \"\\nData: \" + $json.dateLabel + \"\\n\\nNote per segmento (da unire in un unico resoconto):\\n\\n\" + $json.combined) }} }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1808,
+        0
+      ],
+      "id": "ee1ede34-8acc-4ee7-bed1-13631be3a91c",
+      "name": "REDUCE openrouter",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "2dCS6RIr9QIZ9QxT",
+          "name": "OpenRouter"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "function rich(text) {\n  const s = String(text || '');\n  const parts = [];\n  const re = /\\*\\*(.+?)\\*\\*/g;\n  let last = 0, m;\n  while ((m = re.exec(s)) !== null) {\n    if (m.index > last) parts.push({ type:'text', text:{ content: s.slice(last, m.index) } });\n    parts.push({ type:'text', text:{ content: m[1] }, annotations:{ bold:true } });\n    last = m.index + m[0].length;\n  }\n  if (last < s.length) parts.push({ type:'text', text:{ content: s.slice(last) } });\n  if (!parts.length) parts.push({ type:'text', text:{ content: s } });\n  const out = [];\n  for (const p of parts) {\n    const c = p.text.content;\n    if (c.length <= 2000) out.push(p);\n    else for (let i=0;i<c.length;i+=2000) out.push({ ...p, text:{ content: c.slice(i,i+2000) } });\n  }\n  return out;\n}\nfunction h(type, text){ return { object:'block', type, [type]:{ rich_text: rich(text) } }; }\n\nfunction mdToBlocks(md) {\n  const lines = String(md || '').split('\\n');\n  const blocks = [];\n  let table = null;\n  const flush = () => {\n    if (!table || !table.length) { table = null; return; }\n    const rows = table\n      .filter(r => !/^\\s*\\|?\\s*:?-{2,}/.test(r))\n      .map(r => r.replace(/^\\s*\\|/, '').replace(/\\|\\s*$/, '').split('|').map(c => c.trim()));\n    if (!rows.length) { table = null; return; }\n    const width = Math.max(...rows.map(r => r.length));\n    blocks.push({\n      object:'block', type:'table',\n      table: {\n        table_width: width, has_column_header: true, has_row_header: false,\n        children: rows.map(cells => ({\n          object:'block', type:'table_row',\n          table_row: { cells: Array.from({ length: width }, (_, k) => (cells[k] && cells[k].trim()) ? rich(cells[k]) : []) }\n        }))\n      }\n    });\n    table = null;\n  };\n  for (const raw of lines) {\n    const line = raw.replace(/\\s+$/, '');\n    if (/^\\s*\\|.*\\|\\s*$/.test(line)) { (table = table || []).push(line); continue; }\n    if (table) flush();\n    if (!line.trim()) continue;\n    let m;\n    if ((m = line.match(/^(#{1,6})\\s+(.*)/))) { const lvl = Math.min(m[1].length, 3); blocks.push(h('heading_' + lvl, m[2])); }\n    else if ((m = line.match(/^\\s*[-•]\\s+(.*)/))) blocks.push({ object:'block', type:'bulleted_list_item', bulleted_list_item:{ rich_text: rich(m[1]) } });\n    else if ((m = line.match(/^\\s*\\d+\\.\\s+(.*)/))) blocks.push({ object:'block', type:'numbered_list_item', numbered_list_item:{ rich_text: rich(m[1]) } });\n    else blocks.push({ object:'block', type:'paragraph', paragraph:{ rich_text: rich(line) } });\n  }\n  if (table) flush();\n  return blocks;\n}\n\nconst wh = $('Webhook').first().json.body;\nlet summary = $json.choices?.[0]?.message?.content || '';\n\n// Titolo: prima l'H1 del riassunto (LLM, sempre presente), poi fallback\nconst h1 = summary.match(/^\\s*#\\s+(.+)/);\nconst title = (h1 && h1[1].trim()) || wh.filename || ('Riunione ' + new Date(wh.startTime).toLocaleDateString('it-IT'));\n\n// togli l'H1 dal corpo (è già nel titolo)\nsummary = summary.replace(/^\\s*#\\s+.+\\r?\\n?/, '');\n\nconst dateIso = new Date(wh.startTime).toISOString();\n\nconst all = mdToBlocks(summary);\nconst first = all.slice(0, 100);\nconst rest = [];\nfor (let i = 100; i < all.length; i += 100) rest.push(all.slice(i, i + 100));\n\nreturn [{\n  json: {\n    createBody: {\n      parent: { database_id: 'YOUR_NOTION_DATABASE_ID' },\n      properties: {\n        'Name': { title: [{ text: { content: title } }] },\n        'Event time': { date: { start: dateIso } }\n      },\n      children: first\n    },\n    restBatches: rest\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        0
+      ],
+      "id": "3af28b51-6158-4d12-92d0-613df6907575",
+      "name": "Code Notion"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/pages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.createBody) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2240,
+        0
+      ],
+      "id": "fcdace7e-1cd1-4cbc-b1d4-2aa93f08e897",
+      "name": "Notion create page",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "sMdnqJPsywBR2B2r",
+          "name": "Notion"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const pageId = $json.id;\nconst rest = $('Code Notion').first().json.restBatches || [];\nreturn rest.map((blocks, i) => ({ json: { pageId, batchIndex: i, children: blocks } }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2448,
+        0
+      ],
+      "id": "552da65e-80ca-4d80-ab8d-bba2c6ebd6b9",
+      "name": "append batches"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.notion.com/v1/blocks/{{ $json.pageId }}/children",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Notion-Version",
+              "value": "2022-06-28"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ children: $json.children }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2672,
+        0
+      ],
+      "id": "6f62916d-5b62-48f2-910c-0d752e32e33e",
+      "name": "Notion append",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "sMdnqJPsywBR2B2r",
+          "name": "Notion"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Read/Write Files from Disk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read/Write Files from Disk": {
+      "main": [
+        [
+          {
+            "node": "request elevenlabs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "request elevenlabs": {
+      "main": [
+        [
+          {
+            "node": "diarizza",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "diarizza": {
+      "main": [
+        [
+          {
+            "node": "split chunk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "split chunk": {
+      "main": [
+        [
+          {
+            "node": "MAP openrouter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MAP openrouter": {
+      "main": [
+        [
+          {
+            "node": "estrai partial",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "estrai partial": {
+      "main": [
+        [
+          {
+            "node": "Aggregate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate": {
+      "main": [
+        [
+          {
+            "node": "reduce-prep",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "reduce-prep": {
+      "main": [
+        [
+          {
+            "node": "REDUCE openrouter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "REDUCE openrouter": {
+      "main": [
+        [
+          {
+            "node": "Code Notion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code Notion": {
+      "main": [
+        [
+          {
+            "node": "Notion create page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notion create page": {
+      "main": [
+        [
+          {
+            "node": "append batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "append batches": {
+      "main": [
+        [
+          {
+            "node": "Notion append",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "4886dde7-5222-4b0c-b271-c00b4c156a12",
+  "meta": {
+    "instanceId": ""
+  },
+  "nodeGroups": [],
+  "id": "sNR2nxcIIPsDIHpX",
+  "tags": []
+}
