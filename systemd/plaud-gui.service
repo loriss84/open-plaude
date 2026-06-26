@@ -10,11 +10,9 @@ WorkingDirectory=/opt/plaud-toolkit
 Environment=PLAUD_OUTPUT_DIR=/mnt/nfs/plaud
 Environment=PLAUD_REGION=eu
 Environment=PLAUD_GUI_PORT=8787
-# settings.json e poller.log finiscono in /opt/plaud-toolkit/data
 Environment=PLAUD_DATA_DIR=/opt/plaud-toolkit/data
-# Auth Basic della dashboard (CAMBIA la password!). Se ometti la password, la GUI e' aperta.
 Environment=PLAUD_GUI_USER=admin
-Environment=PLAUD_GUI_PASSWORD=cambiami
+Environment=PLAUD_GUI_PASSWORD=changeme
 ExecStart=/usr/bin/npx tsx /opt/plaud-toolkit/server.ts
 Restart=on-failure
 RestartSec=10
