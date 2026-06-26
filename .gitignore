@@ -1,0 +1,21 @@
+# dependencies
+node_modules/
+
+# runtime data (DO NOT COMMIT)
+data/
+*.log
+.plaud/
+config.json
+.env
+
+# Plaud recordings / outputs
+test-output/
+*.mp3
+*.opus
+*.wav
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

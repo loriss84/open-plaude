@@ -1,0 +1,24 @@
+[Unit]
+Description=Plaud poller + GUI (servizio unico: dashboard web + scheduler)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=plaud
+WorkingDirectory=/opt/plaud-toolkit
+Environment=PLAUD_OUTPUT_DIR=/mnt/nfs/plaud
+Environment=PLAUD_REGION=eu
+Environment=PLAUD_GUI_PORT=8787
+# settings.json e poller.log finiscono in /opt/plaud-toolkit/data
+Environment=PLAUD_DATA_DIR=/opt/plaud-toolkit/data
+# Auth Basic della dashboard (CAMBIA la password!). Se ometti la password, la GUI e' aperta.
+Environment=PLAUD_GUI_USER=admin
+Environment=PLAUD_GUI_PASSWORD=cambiami
+ExecStart=/usr/bin/npx tsx /opt/plaud-toolkit/server.ts
+Restart=on-failure
+RestartSec=10
+Nice=10
+
+[Install]
+WantedBy=multi-user.target
