@@ -1,10 +1,3 @@
-/**
- * poller-core.ts — logica riusabile del poller (usata da CLI e da GUI).
- *
- * runPoll(): lista le registrazioni, scarica solo le nuove (audio + metadati +
- * transcript/summary), salva su outputDir, aggiorna lo state. Se il webhook e'
- * abilitato, notifica ogni voce non ancora notificata e marca notified=true.
- */
 
 import { PlaudConfig, PlaudAuth, PlaudClient } from '@plaud/core';
 import { promises as fs } from 'node:fs';
