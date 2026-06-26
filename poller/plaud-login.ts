@@ -1,16 +1,3 @@
-/**
- * plaud-login.ts
- *
- * Setup ONE-TIME: salva le credenziali Plaud (email/password/region) in
- * ~/.plaud/config.json con permessi 0600, poi verifica il login.
- *
- * Uso (dentro il clone di plaud-toolkit):
- *   PLAUD_EMAIL=tu@mail.it PLAUD_PASSWORD='...' PLAUD_REGION=eu \
- *     npx tsx plaud-login.ts
- *
- * NB: plaud-toolkit usa login email+password, NON OTP. Devi avere una
- * password impostata sull'account Plaud (impostala dall'app/web Plaud).
- */
 
 import { PlaudConfig, PlaudAuth } from '@plaud/core';
 import * as os from 'node:os';
