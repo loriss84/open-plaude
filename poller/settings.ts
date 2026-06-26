@@ -1,11 +1,3 @@
-/**
- * settings.ts — configurazione condivisa tra poller e GUI.
- *
- * Le impostazioni vivono in <DATA_DIR>/settings.json (modificabili dalla GUI).
- * I default partono dalle env (retrocompatibili con la v1 CLI).
- * Lo state dei download resta in <outputDir>/.state.json (fonte di verita').
- */
-
 import { promises as fs } from 'node:fs';
 import * as path from 'node:path';
 
