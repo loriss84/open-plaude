@@ -1,9 +1,4 @@
-/**
- * plaud-poller.ts — esecuzione one-shot del poller da CLI.
- * (La GUI/servizio usa direttamente runPoll da poller-core.ts.)
- *
- *   npx tsx plaud-poller.ts
- */
+
 
 import { promises as fs } from 'node:fs';
 import { runPoll } from './poller-core.js';
