@@ -9,12 +9,9 @@ User=n8n
 Environment=N8N_HOST=0.0.0.0
 Environment=N8N_PORT=5678
 Environment=N8N_PROTOCOL=http
-# necessario per accedere via http su LAN (senza, il login non tiene la sessione)
 Environment=N8N_SECURE_COOKIE=false
 Environment=GENERIC_TIMEZONE=Europe/Rome
 Environment=N8N_USER_FOLDER=/opt/n8n
-# se in futuro metti n8n dietro un dominio/reverse-proxy, imposta:
-# Environment=WEBHOOK_URL=https://n8n.tuodominio/
 ExecStart=/usr/bin/n8n start
 Restart=on-failure
 RestartSec=5
