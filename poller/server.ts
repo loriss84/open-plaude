@@ -1,15 +1,4 @@
-/**
- * server.ts — servizio long-running: dashboard web + scheduler del polling.
- *
- *   npx tsx server.ts
- *   → http://localhost:8787   (PLAUD_GUI_PORT per cambiare porta)
- *
- * Sostituisce il systemd timer: esegue runPoll ogni pollIntervalMin (impostazione
- * modificabile dalla GUI), espone log/stato/registrazioni e le impostazioni.
- *
- * NB: la GUI NON ha autenticazione. Esponila solo su LAN/VPN o dietro reverse
- * proxy. Non metterla su internet pubblico.
- */
+
 
 import http from 'node:http';
 import crypto from 'node:crypto';
